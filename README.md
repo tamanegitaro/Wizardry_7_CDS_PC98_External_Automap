@@ -1,4 +1,4 @@
-# Wizardry 7: Crusaders of the Dark Savant PC-98版 External AutoMap
+# Wizardry 7: Crusaders of the Dark Savant PC-9801版 External AutoMap v1.0
 
 ## 概要
 
