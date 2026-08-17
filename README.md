@@ -1,4 +1,4 @@
-# Wizardry 7: Crusaders of the Dark Savant PC-9801版 External AutoMap v1.1
+# Wizardry 7: Crusaders of the Dark Savant PC-9801版 External AutoMap v1.2
 
 ## 概要
 
@@ -6,9 +6,11 @@
 
 `Wizardry7Automap.exe`は、エミュレーター上で動作しているWizardry 7のメモリを外部から読み取り、ゲーム画面とは別のウィンドウにマップを表示します。
 
-標準設定ではAnex86の`anex86.exe`を対象プロセスとして検索しますが、`Config\Wizardry7Automap.conf`の`target`を変更することで、別の実行ファイル名も指定できます。
+標準設定では、Anex86、Neko Project II系エミュレーター、Wizardry Legacyなど、複数の実行ファイルを接続対象として検索します。
 
-本ツールは、**PC-9801版 Wizardry 7**向けです。  
+検索対象は`Config\Wizardry7Automap.conf`の`target1`～`target16`で指定でき、利用しているエミュレーターの実行ファイル名を追加・変更できます。
+
+本ツールは、**PC-9801版 Wizardry 7**向けです。
 海外MS-DOS版、DOS/V版、Wizardry 6、その他の機種版向けAutoMap機能は含まれていません。
 
 現在のPC-98版メモリ解析は未完了のため、本リリースは**Experimental**です。
@@ -17,31 +19,35 @@
 
 今後遊び始めたら改善していきます。
 
+Wizardry 6 Bane of the Cosmic Forge PC-9801用のAutomapはこちらです：
+https://github.com/tamanegitaro/Wizardry_6_BCF_PC98_External_Automap
+
 ## できること
 
 このツールでは、主に以下のことができます。
 
-- Wizardry 7 PC-9801版のプレイ中に、別ウィンドウでAutoMapを表示
-- ゲーム側の踏破情報に合わせたマップ表示
-- 現在位置と向きの表示
-- 壁、扉、床、階段、泉、穴、梯子など、解析済み固定要素の表示
-- 暗闇エリアでのマップ表示制御
-- AutoMapウィンドウのマウスによるサイズ変更
-- マウスドラッグによるマップ移動
-- 中クリックで現在位置へ表示を戻す
-- マスをダブルクリックしてノートを追加・編集・削除
-- ノート上へマウスを重ねると内容を即時表示
-- ノートの右クリックでの色変更
-- ノート内の座標リンクによるマップ移動
-- 対象プロセスやDS.EXEの自動検出・再検索
+* Wizardry 7 PC-9801版のプレイ中に、別ウィンドウでAutoMapを表示
+* ゲーム側の踏破情報に合わせたマップ表示
+* 現在位置と向きの表示
+* 壁、扉、床、階段、泉、穴、梯子など、解析済み固定要素の表示
+* 暗闇エリアでのマップ表示制御
+* AutoMapウィンドウのマウスによるサイズ変更
+* マウスドラッグによるマップ移動
+* 中クリックで現在位置へ表示を戻す
+* マスをダブルクリックしてノートを追加・編集・削除
+* ノート上へマウスを重ねると内容を即時表示
+* ノートの右クリックでの色変更
+* ノート内の座標リンクによるマップ移動
+* 複数の対象プロセスからの自動検出
+* DS.EXEの自動検出・再検索
 
 ## 含まれていないもの
 
 このリポジトリおよびRelease ZIPには、以下のものは含まれていません。
 
-- Wizardry 7のゲームデータ
-- PC-98エミュレーター本体
-- Wizardry 7本体に由来するゲームプログラムやデータファイル
+* Wizardry 7のゲームデータ
+* PC-98エミュレーター本体
+* Wizardry 7本体に由来するゲームプログラムやデータファイル
 
 ゲームを遊ぶには、利用者自身が正規に所有している **Wizardry 7: Crusaders of the Dark Savant PC-9801版** が必要です。
 
@@ -54,14 +60,15 @@ Wizardry 7: Crusaders of the Dark Savant
 PC-9801版
 ```
 
-動作対象は64ビット版Windowsです。  
-標準設定ではAnex86の`anex86.exe`を検索します。
+動作対象は64ビット版Windowsです。
+
+利用しているエミュレーターがConfファイルの一覧にない場合は、`Config\Wizardry7Automap.conf`の`target14`～`target16`などへ実行ファイル名を追加できます。
 
 ## 導入方法
 
 ### 1. Wizardry 7 PC-9801版を遊べる状態にする
 
-最初に、Anex86などのWindows上のPC-98エミュレーターで、Wizardry 7 PC-9801版を通常どおり起動できる状態にしてください。
+最初に、Anex86、Neko Project IIなどのWindows上のPC-98エミュレーターで、Wizardry 7 PC-9801版を通常どおり起動できる状態にしてください。
 
 このAutoMapにはゲーム本体やエミュレーターは含まれていません。
 
@@ -91,11 +98,7 @@ Source\
 
 AutoMapとエミュレーターは、どちらを先に起動しても構いません。
 
-標準設定では、AutoMapは次のプロセスを待機します。
-
-```text
-anex86.exe
-```
+AutoMapは`Config\Wizardry7Automap.conf`に登録されている`target1`～`target16`の実行ファイルを検索します。
 
 対象プロセスを検出すると、Wizardry 7の`DS.EXE`常駐データをメモリ上から検索します。
 
@@ -109,7 +112,22 @@ anex86.exe
 
 ```ini
 [automap]
-target="anex86.exe"
+target1="anex86.exe"
+target2="np21.exe"
+target3="np21nt.exe"
+target4="np2sx.exe"
+target5="np2sxnt.exe"
+target6="np2nt.exe"
+target7="np2.exe"
+target8="np2w.exe"
+target9="np2x64w.exe"
+target10="np21w.exe"
+target11="np21x64w.exe"
+target12="Next.EXE"
+target13="WIZ7.EXE"
+target14=
+target15=
+target16=
 enable=true
 show_tooltips=true
 hide_in_dark_zones=true
@@ -120,24 +138,68 @@ position_y=-1
 wiz7_sns_mode=false
 ```
 
-### target
+### target1 ～ target16
+
+```ini
+target1="anex86.exe"
+target2="np21.exe"
+...
+target16=
+```
+
+接続対象として検索するWindowsプロセスの実行ファイル名を指定します。
+
+`target1`から`target16`まで、最大16個の実行ファイル名を登録できます。
+
+標準では、Anex86、Neko Project II系、T98-NEXT、Wizardry Legacyなどで使用される実行ファイル名を登録しています。
+
+使用しているエミュレーターが標準設定にない場合は、空欄になっている`target14`～`target16`へ追加してください。
+
+例：
+
+```ini
+target14="My Emulator.exe"
+```
+
+空白を含まない実行ファイル名は、二重引用符なしでも指定できます。
+
+```ini
+target14=MyEmulator.exe
+```
+
+空白を含む実行ファイル名は、二重引用符で囲んでください。
+
+```ini
+target14="My Emulator.exe"
+```
+
+実行ファイル名の大文字と小文字は区別しません。
+
+空欄のtargetは検索対象になりません。
+
+### 旧target設定について
+
+v1.1以前では、接続対象を次の形式で指定していました。
 
 ```ini
 target="anex86.exe"
 ```
 
-接続対象として検索するWindowsプロセスの実行ファイル名です。
+後方互換性のため、v1.2でも従来の`target=`は引き続き使用できます。
 
-標準値は`anex86.exe`です。大文字と小文字は区別しません。
+既存のCONFファイルに`target=`が書かれている場合、その実行ファイルも検索対象になります。
 
-次の両形式を使用できます。
+例えば以下のような設定も有効です。
 
 ```ini
-target="My Emulator.exe"
-target=anex86.exe
+target="CustomEmulator.exe"
+target1="anex86.exe"
+target2="np21.exe"
 ```
 
-空白を含む実行ファイル名は二重引用符で囲んでください。
+この場合、`target=`と`target1`～`target16`のすべてが検索対象になります。
+
+ただし、新しく生成される標準CONFでは`target=`は使用せず、`target1`～`target16`のみを書き出します。
 
 ### enable
 
@@ -218,10 +280,10 @@ wiz7_sns_mode=false
 
 ノートを付けたいマスを左ダブルクリックします。
 
-- ノートがないマス：新しいノートを追加
-- ノートがあるマス：既存の内容を編集
-- 入力内容を空欄にしてOK：ノートを削除
-- Cancel：変更せずに閉じる
+* ノートがないマス：新しいノートを追加
+* ノートがあるマス：既存の内容を編集
+* 入力内容を空欄にしてOK：ノートを削除
+* Cancel：変更せずに閉じる
 
 ノートは1件につき最大4096文字です。
 
@@ -266,19 +328,19 @@ position_y=0
 
 ## DS.EXEの検出と再接続
 
-AutoMapは、対象エミュレーターのWindowsプロセスへ接続した後、メモリ上からWizardry 7の`DS.EXE`常駐データを自動検索します。
+AutoMapは、`target`または`target1`～`target16`で指定された対象プロセスへ接続した後、メモリ上からWizardry 7の`DS.EXE`常駐データを自動検索します。
 
 ゲームウィンドウを終了するなどして、検出済みのDS.EXEメモリが無効になった場合は、DS.EXEを再検索します。
 
 待機中には、状態に応じて次のような表示が出ます。
 
 ```text
-Waiting for anex86.exe
-anex86.exe found - scanning for Wizardry 7
+Waiting for target process
+対象プロセス found - scanning for Wizardry 7
 Waiting for DS.EXE...
 ```
 
-`target`を変更している場合、表示されるプロセス名も設定内容に応じて変わります。
+複数のtargetが設定されている場合は、その中から実際に検出されたプロセスへ接続します。
 
 ## 現在の制限
 
@@ -286,11 +348,11 @@ PC-98版の動的オブジェクト領域は、まだ完全には解析できて
 
 現在、次の要素には未対応です。
 
-- 宝箱
-- 隠し物
-- その他、動的オブジェクトテーブルに保存されている要素
-- 取得済み・使用済み状態を必要とする一部表示
-- Mapping、Locate Objectなどの呪文イベントによる表示効果
+* 宝箱
+* 隠し物
+* その他、動的オブジェクトテーブルに保存されている要素
+* 取得済み・使用済み状態を必要とする一部表示
+* Mapping、Locate Objectなどの呪文イベントによる表示効果
 
 現在は、PC-98版でアドレスと構造を確認できたマップ情報のみを使用しています。
 
@@ -300,7 +362,7 @@ PC-98版の動的オブジェクト領域は、まだ完全には解析できて
 
 このツールは非公式です。
 
-本ツールの導入、動作、不具合などについて、Anex86、Wizardryの権利者・販売元、AutoMap Modの原作者・refactor作者、その他の公式サポート窓口へ問い合わせないでください。
+本ツールの導入、動作、不具合などについて、Anex86、Neko Project II、その他のエミュレーター開発者、Wizardryの権利者・販売元、AutoMap Modの原作者・refactor作者、その他の公式サポート窓口へ問い合わせないでください。
 
 また、ゲーム本体の著作物は一切含めていません。利用者自身が正規に所有しているゲームデータを使用してください。
 
@@ -343,18 +405,18 @@ See [`LICENSE.txt`](LICENSE.txt) and the copyright/license notices in the source
 
 This project is based on the work of the **Wizardry 6 & 7 Automap Mod**.
 
-I would like to express my deepest gratitude to the original author and the refactor author.  
+I would like to express my deepest gratitude to the original author and the refactor author.
 Without their work, this PC-98 External AutoMap adaptation would not have been possible.
 
-Original: Copyright (C) 2014 KoriTama  
-Wizardry 6 Automap Mod:  
+Original: Copyright (C) 2014 KoriTama
+Wizardry 6 Automap Mod:
 https://www.moddb.com/mods/wizardry-6-automap-mod
 
-Wizardry 7 Automap Mod:  
+Wizardry 7 Automap Mod:
 https://www.moddb.com/mods/wizardry-7-automap-mod
 
-Refactor: Copyright (C) 2025 DungeonCrawl-Classics.com  
-Wizardry 7 Map Details:  
+Refactor: Copyright (C) 2025 DungeonCrawl-Classics.com
+Wizardry 7 Map Details:
 https://dungeoncrawl-classics.com/wizardry-series/7-crusaders-of-the-dark-savant/wizardry-7-map-details/
 
 This project is an unofficial adaptation for the PC-9801 version of Wizardry 7.
