@@ -81,8 +81,13 @@ static int s_configWindowWidth = W7EA_DEFAULT_WINDOW_WIDTH;
 static int s_configWindowHeight = W7EA_DEFAULT_WINDOW_HEIGHT;
 static int s_configWindowX = -1;
 static int s_configWindowY = -1;
-static std::string s_targetProcessName = "anex86.exe";
-static std::wstring s_targetProcessNameWide = L"anex86.exe";
+struct TargetProcessSpec {
+    std::string name;
+    std::wstring wideName;
+};
+
+static std::vector<TargetProcessSpec> s_targetProcesses;
+static std::string s_attachedTargetProcessName;
 
 int am_width = W7EA_DEFAULT_WINDOW_WIDTH;
 int am_height = W7EA_DEFAULT_WINDOW_HEIGHT;
@@ -731,7 +736,9 @@ static std::wstring ConfigStringToWide(const std::string& value)
 
 static std::string WaitingStatusText()
 {
-    return std::string("Waiting for ") + s_targetProcessName;
+    if (s_targetProcesses.size() == 1)
+        return std::string("Waiting for ") + s_targetProcesses.front().name;
+    return "Waiting for target process";
 }
 
 static bool ParseBoolValue(const std::string& value, bool fallback)
@@ -771,7 +778,22 @@ static void WriteDefaultAutomapConfig(const char* path)
 
     std::fprintf(fp,
                  "[automap]\n"
-                 "target=\"anex86.exe\"\n"
+                 "target1=\"anex86.exe\"\n"
+                 "target2=\"np21.exe\"\n"
+                 "target3=\"np21nt.exe\"\n"
+                 "target4=\"np2sx.exe\"\n"
+                 "target5=\"np2sxnt.exe\"\n"
+                 "target6=\"np2nt.exe\"\n"
+                 "target7=\"np2.exe\"\n"
+                 "target8=\"np2w.exe\"\n"
+                 "target9=\"np2x64w.exe\"\n"
+                 "target10=\"np21w.exe\"\n"
+                 "target11=\"np21x64w.exe\"\n"
+                 "target12=\"Next.EXE\"\n"
+                 "target13=\"WIZ7.EXE\"\n"
+                 "target14=\n"
+                 "target15=\n"
+                 "target16=\n"
                  "enable=true\n"
                  "show_tooltips=true\n"
                  "hide_in_dark_zones=true\n"
@@ -796,6 +818,8 @@ static void LoadAutomapConfig()
     }
 
     bool inAutomapSection = false;
+    // target= is slot 0 for backward compatibility. target1..target16 follow it.
+    std::array<std::string, 17> targetSlots{};
     char line[512];
     while (std::fgets(line, sizeof(line), fp)) {
         std::string text = TrimString(line);
@@ -818,13 +842,19 @@ static void LoadAutomapConfig()
         std::string key = ToLowerString(TrimString(text.substr(0, eq)));
         std::string value = TrimString(text.substr(eq + 1));
 
+        int targetIndex = -1;
         if (key == "target") {
-            const std::string parsedTarget = FileNameOnly(value);
-            const std::wstring parsedTargetWide = ConfigStringToWide(parsedTarget);
-            if (!parsedTarget.empty() && !parsedTargetWide.empty()) {
-                s_targetProcessName = parsedTarget;
-                s_targetProcessNameWide = parsedTargetWide;
-            }
+            targetIndex = 0;
+        } else if (key.rfind("target", 0) == 0 && key.size() > 6) {
+            const std::string suffix = key.substr(6);
+            char* end = nullptr;
+            const long parsedIndex = std::strtol(suffix.c_str(), &end, 10);
+            if (end != suffix.c_str() && *end == '\0' && parsedIndex >= 1 && parsedIndex <= 16)
+                targetIndex = static_cast<int>(parsedIndex);
+        }
+
+        if (targetIndex >= 0) {
+            targetSlots[static_cast<size_t>(targetIndex)] = FileNameOnly(value);
         } else if (key == "enable") {
             s_automapEnabled = ParseBoolValue(value, s_automapEnabled);
         } else if (key == "show_tooltips") {
@@ -844,6 +874,30 @@ static void LoadAutomapConfig()
         }
     }
     std::fclose(fp);
+
+    s_targetProcesses.clear();
+    for (const std::string& targetName : targetSlots) {
+        if (targetName.empty())
+            continue;
+
+        const std::wstring wideName = ConfigStringToWide(targetName);
+        if (wideName.empty())
+            continue;
+
+        bool duplicate = false;
+        for (const TargetProcessSpec& existing : s_targetProcesses) {
+            if (_wcsicmp(existing.wideName.c_str(), wideName.c_str()) == 0) {
+                duplicate = true;
+                break;
+            }
+        }
+        if (!duplicate)
+            s_targetProcesses.push_back(TargetProcessSpec{targetName, wideName});
+    }
+
+    // Keep a useful fallback for an empty or malformed configuration.
+    if (s_targetProcesses.empty())
+        s_targetProcesses.push_back(TargetProcessSpec{"anex86.exe", L"anex86.exe"});
 
     am_width = s_configWindowWidth;
     am_height = s_configWindowHeight;
@@ -1416,26 +1470,37 @@ static bool ProcessAlive(HANDLE h)
     return exitCode == STILL_ACTIVE;
 }
 
-static bool FindTargetProcess(DWORD& pid)
+static bool FindTargetProcess(DWORD& pid, std::string& matchedName)
 {
     pid = 0;
-    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (snap == INVALID_HANDLE_VALUE) { return false; }
+    matchedName.clear();
 
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE)
+        return false;
+
+    std::vector<std::pair<DWORD, std::wstring>> processes;
     PROCESSENTRY32W pe;
     std::memset(&pe, 0, sizeof(pe));
     pe.dwSize = sizeof(pe);
     if (Process32FirstW(snap, &pe)) {
         do {
-            if (_wcsicmp(pe.szExeFile, s_targetProcessNameWide.c_str()) == 0) {
-                pid = pe.th32ProcessID;
-                CloseHandle(snap);
-                return true;
-            }
+            processes.emplace_back(pe.th32ProcessID, pe.szExeFile);
         } while (Process32NextW(snap, &pe));
     }
-
     CloseHandle(snap);
+
+    // Preserve compatibility priority: target= first, then target1..target16.
+    for (const TargetProcessSpec& target : s_targetProcesses) {
+        for (const auto& process : processes) {
+            if (_wcsicmp(process.second.c_str(), target.wideName.c_str()) == 0) {
+                pid = process.first;
+                matchedName = target.name;
+                return true;
+            }
+        }
+    }
+
     return false;
 }
 
@@ -1584,6 +1649,7 @@ static void DetachFromProcess()
         s_process = nullptr;
     }
     s_gameAttached = false;
+    s_attachedTargetProcessName.clear();
     s_dsAnchorFailureCount = 0;
     s_pc98SnapshotValid = false;
     s_pc98SnapshotBase = 0;
@@ -1603,23 +1669,26 @@ static void DetachFromProcess()
 static void EnsureAttachedOrWaiting()
 {
     if (s_process && !ProcessAlive(s_process)) {
-        std::printf("%s exited. Waiting again...\n", s_targetProcessName.c_str());
+        const char* exitedName = s_attachedTargetProcessName.empty() ? "Target process" : s_attachedTargetProcessName.c_str();
+        std::printf("%s exited. Waiting again...\n", exitedName);
         DetachFromProcess();
     }
 
     if (!s_process) {
         DWORD pid = 0;
-        if (FindTargetProcess(pid)) {
+        std::string matchedName;
+        if (FindTargetProcess(pid, matchedName)) {
             HANDLE h = OpenTargetProcess(pid);
             if (h) {
                 s_process = h;
-                s_statusText = s_targetProcessName + " found - scanning for Wizardry 7";
+                s_attachedTargetProcessName = matchedName;
+                s_statusText = matchedName + " found - scanning for Wizardry 7";
                 SetAutomapWindowTitle(s_statusText.c_str());
                 // Paint the centered status before the synchronous memory scan.
                 SetStatusOverlayText(s_statusText);
                 ShowStatusOverlay(true);
                 s_forceRedraw = true;
-                std::printf("Attached to %s (PID=%lu)\n", s_targetProcessName.c_str(), (unsigned long)pid);
+                std::printf("Attached to %s (PID=%lu)\n", matchedName.c_str(), (unsigned long)pid);
             }
         }
         if (!s_process)

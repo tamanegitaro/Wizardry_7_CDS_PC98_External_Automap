@@ -117,68 +117,6 @@ uint8_t amw7_cache_floor0[W7_LEVEL_COUNT][W7_QUADRANT_COUNT * 64 / 8];
 uint8_t amw7_cache_floor1[W7_LEVEL_COUNT][W7_QUADRANT_COUNT * 64 / 8];
 uint8_t amw7_cache_floor2[W7_LEVEL_COUNT][W7_QUADRANT_COUNT * 64 / 8];
 uint8_t amw7_cache_visited_cells[W7_LEVEL_COUNT][W7_QUADRANT_COUNT * 64 / 8];
-
-// PC-98 external polling stabilization.
-// A map identity is committed only after the same valid level + map geometry
-// has been observed in three consecutive snapshots. Normal movement within an
-// already committed map identity remains immediate.
-static const unsigned W7_PC98_STABLE_POLLS_REQUIRED = 3;
-static bool s_w7_pc98_committed_identity_valid = false;
-static uint16_t s_w7_pc98_committed_level = 0xFFFF;
-static uint32_t s_w7_pc98_committed_map_hash = 0;
-static bool s_w7_pc98_pending_identity = false;
-static uint16_t s_w7_pc98_pending_level = 0xFFFF;
-static uint32_t s_w7_pc98_pending_map_hash = 0;
-static unsigned s_w7_pc98_pending_count = 0;
-
-static uint32_t W7_PC98_HashBytes(uint32_t hash, const uint8_t* data, size_t len)
-{
-	// 32-bit FNV-1a. This is used only to identify whether the current static
-	// map geometry is the same across adjacent polling snapshots.
-	for (size_t i = 0; i < len; ++i) {
-		hash ^= static_cast<uint32_t>(data[i]);
-		hash *= 16777619u;
-	}
-	return hash;
-}
-
-static uint32_t W7_PC98_MapGeometryHash()
-{
-	const uintptr_t mapbase = amw7_pc98_anchor + 0xA708;
-	uint8_t buf[768]; // largest known map-geometry array is features (0x300)
-	uint32_t hash = 2166136261u;
-
-	struct Range { uintptr_t offset; size_t size; };
-	const Range ranges[] = {
-		{0x090, sizeof(amw7_cache_hwalls) / W7_LEVEL_COUNT},
-		{0x290, sizeof(amw7_cache_vwalls) / W7_LEVEL_COUNT},
-		{0x490, sizeof(amw7_cache_qsx) / W7_LEVEL_COUNT},
-		{0x4A0, sizeof(amw7_cache_qsy) / W7_LEVEL_COUNT},
-		{0x4B0, sizeof(amw7_cache_features) / W7_LEVEL_COUNT},
-		{0x7B0, sizeof(amw7_cache_features_dirs) / W7_LEVEL_COUNT},
-		{0x8B0, sizeof(amw7_cache_floor0) / W7_LEVEL_COUNT},
-		{0x930, sizeof(amw7_cache_floor1) / W7_LEVEL_COUNT},
-		{0x9B0, sizeof(amw7_cache_floor2) / W7_LEVEL_COUNT},
-	};
-
-	for (const Range& r : ranges) {
-		MEM_BlockRead(mapbase + r.offset, buf, r.size);
-		hash = W7_PC98_HashBytes(hash, buf, r.size);
-	}
-	return hash;
-}
-
-static void W7_PC98_ResetStability()
-{
-	s_w7_pc98_committed_identity_valid = false;
-	s_w7_pc98_committed_level = 0xFFFF;
-	s_w7_pc98_committed_map_hash = 0;
-	s_w7_pc98_pending_identity = false;
-	s_w7_pc98_pending_level = 0xFFFF;
-	s_w7_pc98_pending_map_hash = 0;
-	s_w7_pc98_pending_count = 0;
-}
-
 bool amw7_map_data_dirty = false;
 bool amw7_mapIsLoading = false;
 
@@ -2220,8 +2158,6 @@ void W7_OnOverlayLoad()
 
 void W7_NewGame(){
 
-	W7_PC98_ResetStability();
-
 	amw7_current_level = 0xFFFF; // Party position: map index
 	amw7_current_quadrant = 0; // Party position: quadrant
 	amw7_current_qX = 0;
@@ -2421,51 +2357,6 @@ void W7_PollState()
 		}
 
 		const bool firstValidPoll = (amw7_current_level >= W7_LEVEL_COUNT);
-		const uint32_t mapGeometryHash = W7_PC98_MapGeometryHash();
-
-		// Do not let a transient map-load snapshot poison another level's cache.
-		// Normal movement inside the already committed map identity is still
-		// accepted immediately. A first attach, level change, or map-geometry
-		// change must survive three consecutive valid snapshots before commit.
-		const bool identityChanged =
-			firstValidPoll ||
-			!s_w7_pc98_committed_identity_valid ||
-			(newLevel != s_w7_pc98_committed_level) ||
-			(mapGeometryHash != s_w7_pc98_committed_map_hash);
-
-		if (identityChanged) {
-			if (!s_w7_pc98_pending_identity ||
-				s_w7_pc98_pending_level != newLevel ||
-				s_w7_pc98_pending_map_hash != mapGeometryHash) {
-				s_w7_pc98_pending_identity = true;
-				s_w7_pc98_pending_level = newLevel;
-				s_w7_pc98_pending_map_hash = mapGeometryHash;
-				s_w7_pc98_pending_count = 1;
-			} else if (s_w7_pc98_pending_count < W7_PC98_STABLE_POLLS_REQUIRED) {
-				++s_w7_pc98_pending_count;
-			}
-
-			if (s_w7_pc98_pending_count < W7_PC98_STABLE_POLLS_REQUIRED) {
-				// Keep rendering the last known-good committed state. Do not call
-				// W7_UpdateCache(), so transient visited/map data cannot become sticky.
-				amw7_need_update_once = true;
-				return;
-			}
-
-			// Three consecutive snapshots agree on the map identity. Commit the
-			// latest snapshot below, including its latest position and visited bits.
-			s_w7_pc98_committed_identity_valid = true;
-			s_w7_pc98_committed_level = newLevel;
-			s_w7_pc98_committed_map_hash = mapGeometryHash;
-			s_w7_pc98_pending_identity = false;
-			s_w7_pc98_pending_count = 0;
-		} else {
-			// A transient candidate that returned to the committed identity before
-			// reaching three confirmations is discarded completely.
-			s_w7_pc98_pending_identity = false;
-			s_w7_pc98_pending_count = 0;
-		}
-
 		const bool levelChanged = (amw7_current_level != newLevel);
 		const bool positionChanged =
 			firstValidPoll ||
@@ -2494,12 +2385,12 @@ void W7_PollState()
 		amw7_current_dir = newDir;
 
 		// The host process is read once as a coherent 64 KiB snapshot every
-		// 33 ms. Refresh all known map arrays only after the identity above is
-		// either already committed or has passed the three-poll stability gate.
+		// 33 ms. Refresh all known map arrays from that local snapshot every poll.
 		W7_UpdateCache(0);
 		W7_UpdateVisData();
 		amw7_map_data_dirty = true;
 		amw7_need_update_once = true;
+		(void)firstValidPoll;
 		(void)positionChanged;
 		return;
 	}
