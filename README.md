@@ -4,7 +4,7 @@
 
 このリポジトリは、**Wizardry 7: Crusaders of the Dark Savant PC-9801版**をWindows上のPC-98エミュレーターで遊ぶための、非公式External AutoMapです。
 
-`Wizardry7Automap.exe`は、エミュレーター上で動作しているWizardry 7のメモリを外部から読み取り、ゲーム画面とは別のウィンドウにマップを表示します。
+使い方としては、`Wizardry7Automap.exe`を実行し、なおかつNeko Project IIなどのエミュレーターを実行すると、Automapが自動的にエミュレーターのメモリを読み、マップを自動描画します。
 
 標準設定では、Anex86、Neko Project II系エミュレーター、Wizardry Legacyなど、複数の実行ファイルを接続対象として検索します。
 
